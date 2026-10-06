@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Bouncing Balls Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Inter', sans-serif;
+            color: #e2e8f0;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        /* Minimalistic Glassmorphism UI */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        /* Slim elegant scrollbar for theme input */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        /* Styled Range Sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            margin-top: -4px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+    
+    <!-- Poetry Display Overlay -->
+    <div id="poetry-overlay" class="absolute inset-0 z-10 pointer-events-none flex items-center justify-center hidden opacity-0 transition-opacity duration-1000">
+        <div class="text-center p-8 rounded-2xl glass-panel">
+            <p id="poetry-text" class="text-2xl md:text-4xl font-light tracking-wide leading-loose text-white text-shadow-lg font-serif italic"></p>
+        </div>
+    </div>
+
+    <!-- Minimalistic UI Overlay -->
+    <div class="absolute top-4 right-4 z-20 flex flex-col items-end">
+        <!-- Toggle Button -->
+        <button id="toggle-ui-btn" class="p-2 rounded-full glass-panel hover:bg-white/10 transition-colors text-white focus:outline-none flex items-center justify-center w-10 h-10 mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+        </button>
+
+        <!-- Control Panel (Collapsible) -->
+        <div id="control-panel" class="glass-panel p-5 rounded-xl w-72 flex flex-col gap-5 text-sm transition-all duration-300 transform origin-top-right">
+            
+            <!-- Standard Controls -->
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <span class="font-medium text-gray-300">Ball Count</span>
+                    <span id="ballCountDisplay" class="text-indigo-400 font-mono">500</span>
+                </div>
+                <input type="range" id="ballCount" min="10" max="2000" value="500">
+
+                <div class="flex justify-between items-center">
+                    <span class="font-medium text-gray-300">Gravity</span>
+                    <span id="gravityDisplay" class="text-indigo-400 font-mono">0.5</span>
+                </div>
+                <input type="range" id="gravity" min="0" max="3" step="0.05" value="0.5">
+
+                <div class="flex justify-between items-center">
+                    <span class="font-medium text-gray-300">Bounciness</span>
+                    <span id="frictionDisplay" class="text-indigo-400 font-mono">0.95</span>
+                </div>
+                <input type="range" id="friction" min="0.5" max="1" step="0.01" value="0.95">
+            </div>
+
+            <div class="h-px w-full bg-white/10"></div>
+
+            <!-- AI Features -->
+            <div class="space-y-3">
+                <div class="flex flex-col gap-2">
+                    <label class="font-medium text-xs text-yellow-400 flex items-center gap-1">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                        AI Theme
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="text" id="themePrompt" placeholder="e.g. synthwave" class="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition-colors">
+                        <button id="themeBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded transition-colors whitespace-nowrap">Apply</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    <button id="poetryBtn" class="bg-emerald-600/80 hover:bg-emerald-500 text-white py-2 rounded transition-colors flex justify-center items-center gap-1 text-xs font-medium">
+                        📜 Poem
+                    </button>
+                    <button id="chaosBtn" class="bg-rose-600/80 hover:bg-rose-500 text-white py-2 rounded transition-colors flex justify-center items-center gap-1 text-xs font-medium">
+                        🎲 Chaos
+                    </button>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <button id="resetBtn" class="w-full bg-white/10 hover:bg-white/20 text-white py-2 rounded mt-2 transition-colors font-medium border border-white/5">
+                Reset Simulation
+            </button>
+            
+            <!-- Status & Stats -->
+            <div class="flex justify-between items-center text-xs text-gray-500 mt-1">
+                <span>FPS: <span id="fps" class="text-gray-300 font-mono">0</span></span>
+                <span id="aiStatus" class="text-indigo-400 hidden animate-pulse">Contacting AI...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // UI Logic
+        const uiPanel = document.getElementById('control-panel');
+        const toggleUiBtn = document.getElementById('toggleUiBtn');
+        let isUiOpen = true;
+
+        document.getElementById('toggle-ui-btn').addEventListener('click', () => {
+            isUiOpen = !isUiOpen;
+            if (isUiOpen) {
+                uiPanel.style.transform = 'scale(1)';
+                uiPanel.style.opacity = '1';
+                uiPanel.style.pointerEvents = 'auto';
+            } else {
+                uiPanel.style.transform = 'scale(0.95)';
+                uiPanel.style.opacity = '0';
+                uiPanel.style.pointerEvents = 'none';
+            }
+        });
+
+        // 3D Scene Setup
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050505, 0.002); // Add slight fog for depth
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+        camera.position.set(0, 50, 180); // Elevated, looking down slightly
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Performance optimization
+        container.appendChild(renderer.domElement);
+
+        // Orbit Controls for interactive camera
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 600;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const pointLight1 = new THREE.PointLight(0xffffff, 0.8);
+        pointLight1.position.set(100, 150, 100);
+        scene.add(pointLight1);
+        
+        const pointLight2 = new THREE.PointLight(0xaabbff, 0.5);
+        pointLight2.position.set(-100, -50, -100);
+        scene.add(pointLight2);
+
+        // Simulation Parameters
+        const BOUNDARY = 80; // Box is from -80 to 80 in all directions (160x160x160)
+        
+        // Draw bounding box wireframe
+        const boxGeo = new THREE.BoxGeometry(BOUNDARY * 2, BOUNDARY * 2, BOUNDARY * 2);
+        const boxMat = new THREE.LineBasicMaterial({ color: 0x334455, transparent: true, opacity: 0.3 });
+        const boxWireframe = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), boxMat);
+        scene.add(boxWireframe);
+        
+        // Floor grid for visual grounding
+        const gridHelper = new THREE.GridHelper(BOUNDARY * 2, 20, 0x444444, 0x222222);
+        gridHelper.position.y = -BOUNDARY;
+        scene.add(gridHelper);
+
+        // State Variables
+        let numBalls = parseInt(document.getElementById('ballCount').value);
+        let gravity = parseFloat(document.getElementById('gravity').value);
+        let restitution = parseFloat(document.getElementById('friction').value); // Using 'restitution' for bounciness
+        let speedMultiplier = 1.0;
+        let currentThemeColors = null;
+
+        // Physics Arrays (Data-oriented for speed)
+        let positions = [];
+        let velocities = [];
+        let radii = [];
+        let masses = [];
+
+        // InstancedMesh for rendering thousands of balls efficiently
+        let instancedMesh;
+        const sphereGeometry = new THREE.SphereGeometry(1, 16, 16); // Base radius 1
+        // Use standard material for nice shading
+        const sphereMaterial = new THREE.MeshStandardMaterial({ 
+            roughness: 0.2, 
+            metalness: 0.3 
+        });
+
+        const dummy = new THREE.Object3D();
+        const color = new THREE.Color();
+
+        function randomColorHex() {
+            if (currentThemeColors && currentThemeColors.length > 0) {
+                return currentThemeColors[Math.floor(Math.random() * currentThemeColors.length)];
+            }
+            // Default bright pastel-ish colors
+            const hsl = `hsl(${Math.random() * 360}, 80%, 60%)`;
+            color.setStyle(hsl);
+            return color.getHex();
+        }
+
+        function initSimulation() {
+            if (instancedMesh) {
+                scene.remove(instancedMesh);
+                instancedMesh.dispose();
+            }
+
+            positions = new Float32Array(numBalls * 3);
+            velocities = new Float32Array(numBalls * 3);
+            radii = new Float32Array(numBalls);
+            masses = new Float32Array(numBalls);
+
+            instancedMesh = new THREE.InstancedMesh(sphereGeometry, sphereMaterial, numBalls);
+            instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+            for (let i = 0; i < numBalls; i++) {
+                // Random radius between 2 and 6
+                const r = Math.random() * 4 + 2; 
+                radii[i] = r;
+                masses[i] = r * r * r; // Mass proportional to volume in 3D
+
+                // Random position within bounds
+                const x = (Math.random() - 0.5) * (BOUNDARY * 2 - r * 2);
+                const y = (Math.random() - 0.5) * (BOUNDARY * 2 - r * 2);
+                const z = (Math.random() - 0.5) * (BOUNDARY * 2 - r * 2);
+
+                positions[i*3] = x;
+                positions[i*3 + 1] = y;
+                positions[i*3 + 2] = z;
+
+                // Random velocity
+                velocities[i*3] = (Math.random() - 0.5) * 4 * speedMultiplier;
+                velocities[i*3 + 1] = (Math.random() - 0.5) * 4 * speedMultiplier;
+                velocities[i*3 + 2] = (Math.random() - 0.5) * 4 * speedMultiplier;
+
+                // Set initial visual transforms
+                dummy.position.set(x, y, z);
+                dummy.scale.set(r, r, r);
+                dummy.updateMatrix();
+                instancedMesh.setMatrixAt(i, dummy.matrix);
+
+                // Set Color
+                color.setHex(randomColorHex());
+                instancedMesh.setColorAt(i, color);
+            }
+
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            instancedMesh.instanceColor.needsUpdate = true;
+            scene.add(instancedMesh);
+        }
+
+        function updatePhysics() {
+            if (!instancedMesh) return;
+
+            // 1. Move and Boundary Collision
+            for (let i = 0; i < numBalls; i++) {
+                let idx = i * 3;
+                let idy = idx + 1;
+                let idz = idx + 2;
+                let r = radii[i];
+
+                // Apply Gravity
+                velocities[idy] -= gravity * 0.1; // Scale down slider value for 60fps
+
+                // Move
+                positions[idx] += velocities[idx];
+                positions[idy] += velocities[idy];
+                positions[idz] += velocities[idz];
+
+                // Boundary Collisions (Box)
+                // X Axis
+                if (positions[idx] > BOUNDARY - r) {
+                    positions[idx] = BOUNDARY - r;
+                    velocities[idx] *= -restitution;
+                } else if (positions[idx] < -BOUNDARY + r) {
+                    positions[idx] = -BOUNDARY + r;
+                    velocities[idx] *= -restitution;
+                }
+
+                // Y Axis (Floor / Ceiling)
+                if (positions[idy] > BOUNDARY - r) {
+                    positions[idy] = BOUNDARY - r;
+                    velocities[idy] *= -restitution;
+                } else if (positions[idy] < -BOUNDARY + r) {
+                    positions[idy] = -BOUNDARY + r;
+                    velocities[idy] *= -restitution;
+                    // Apply ground friction to X/Z when hitting floor
+                    velocities[idx] *= 0.98;
+                    velocities[idz] *= 0.98;
+                }
+
+                // Z Axis
+                if (positions[idz] > BOUNDARY - r) {
+                    positions[idz] = BOUNDARY - r;
+                    velocities[idz] *= -restitution;
+                } else if (positions[idz] < -BOUNDARY + r) {
+                    positions[idz] = -BOUNDARY + r;
+                    velocities[idz] *= -restitution;
+                }
+            }
+
+            // 2. Sphere-to-Sphere Elastic Collisions (O(N^2) - Optimized array lookups)
+            for (let i = 0; i < numBalls; i++) {
+                let i_idx = i * 3;
+                let i_r = radii[i];
+                let i_mass = masses[i];
+
+                for (let j = i + 1; j < numBalls; j++) {
+                    let j_idx = j * 3;
+                    
+                    let dx = positions[j_idx] - positions[i_idx];
+                    let dy = positions[j_idx+1] - positions[i_idx+1];
+                    let dz = positions[j_idx+2] - positions[i_idx+2];
+                    
+                    let distSq = dx*dx + dy*dy + dz*dz;
+                    let rSum = i_r + radii[j];
+                    let minSq = rSum * rSum;
+
+                    if (distSq < minSq && distSq > 0) {
+                        let dist = Math.sqrt(distSq);
+                        
+                        // Normal vector (pointing from i to j)
+                        let nx = dx / dist;
+                        let ny = dy / dist;
+                        let nz = dz / dist;
+
+                        // --- Positional Correction (Apply always if intersecting to prevent clumping/sinking) ---
+                        let j_mass = masses[j];
+                        let percent = 0.8; // High penetration allowance to strongly separate resting clumps
+                        let slop = 0.01; // Minimal slop so they sit flush
+                        let penetration = rSum - dist;
+                        let correction = Math.max(penetration - slop, 0.0) / (1/i_mass + 1/j_mass) * percent;
+                        
+                        let cx = nx * correction;
+                        let cy = ny * correction;
+                        let cz = nz * correction;
+
+                        // Push 'i' away from 'j'
+                        positions[i_idx] -= cx / i_mass;
+                        positions[i_idx+1] -= cy / i_mass;
+                        positions[i_idx+2] -= cz / i_mass;
+
+                        // Push 'j' away from 'i'
+                        positions[j_idx] += cx / j_mass;
+                        positions[j_idx+1] += cy / j_mass;
+                        positions[j_idx+2] += cz / j_mass;
+
+                        // --- Velocity Resolution ---
+                        // Relative velocity (velocity of j relative to i)
+                        let vx = velocities[j_idx] - velocities[i_idx];
+                        let vy = velocities[j_idx+1] - velocities[i_idx+1];
+                        let vz = velocities[j_idx+2] - velocities[i_idx+2];
+
+                        // Velocity along the normal
+                        let velAlongNormal = vx*nx + vy*ny + vz*nz;
+
+                        // Resolve collision only if they are approaching each other
+                        if (velAlongNormal < 0) {
+                            let e = restitution; // Bounciness
+
+                            // Impulse scalar
+                            let jImpulse = -(1 + e) * velAlongNormal;
+                            jImpulse /= (1/i_mass + 1/j_mass);
+
+                            // Apply impulse vector
+                            let impulseX = jImpulse * nx;
+                            let impulseY = jImpulse * ny;
+                            let impulseZ = jImpulse * nz;
+
+                            velocities[i_idx] -= impulseX / i_mass;
+                            velocities[i_idx+1] -= impulseY / i_mass;
+                            velocities[i_idx+2] -= impulseZ / i_mass;
+
+                            velocities[j_idx] += impulseX / j_mass;
+                            velocities[j_idx+1] += impulseY / j_mass;
+                            velocities[j_idx+2] += impulseZ / j_mass;
+                        }
+                    }
+                }
+            }
+
+            // 3. Boundary check iteration 2 (prevents balls clipping outside the box after sphere resolution pushes them)
+            for (let i = 0; i < numBalls; i++) {
+                let idx = i * 3;
+                let idy = idx + 1;
+                let idz = idx + 2;
+                let r = radii[i];
+
+                if (positions[idx] > BOUNDARY - r) positions[idx] = BOUNDARY - r;
+                else if (positions[idx] < -BOUNDARY + r) positions[idx] = -BOUNDARY + r;
+
+                if (positions[idy] > BOUNDARY - r) positions[idy] = BOUNDARY - r;
+                else if (positions[idy] < -BOUNDARY + r) positions[idy] = -BOUNDARY + r;
+
+                if (positions[idz] > BOUNDARY - r) positions[idz] = BOUNDARY - r;
+                else if (positions[idz] < -BOUNDARY + r) positions[idz] = -BOUNDARY + r;
+            }
+
+            // 4. Update Visual Matrices
+            for (let i = 0; i < numBalls; i++) {
+                let idx = i * 3;
+                dummy.position.set(positions[idx], positions[idx+1], positions[idx+2]);
+                dummy.scale.set(radii[i], radii[i], radii[i]);
+                dummy.updateMatrix();
+                instancedMesh.setMatrixAt(i, dummy.matrix);
+            }
+            instancedMesh.instanceMatrix.needsUpdate = true;
+        }
+
+        let lastTime = performance.now();
+        let frames = 0;
+        const fpsElement = document.getElementById('fps');
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Calculate FPS
+            const now = performance.now();
+            frames++;
+            if (now - lastTime >= 1000) {
+                fpsElement.textContent = frames;
+                frames = 0;
+                lastTime = now;
+            }
+
+            updatePhysics();
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Handle Window Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // UI Listeners
+        document.getElementById('ballCount').addEventListener('input', (e) => {
+            document.getElementById('ballCountDisplay').textContent = e.target.value;
+        });
+        document.getElementById('ballCount').addEventListener('change', (e) => {
+            numBalls = parseInt(e.target.value);
+            initSimulation();
+        });
+
+        document.getElementById('gravity').addEventListener('input', (e) => {
+            gravity = parseFloat(e.target.value);
+            document.getElementById('gravityDisplay').textContent = gravity;
+        });
+
+        document.getElementById('friction').addEventListener('input', (e) => {
+            restitution = parseFloat(e.target.value);
+            document.getElementById('frictionDisplay').textContent = restitution;
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            speedMultiplier = 1.0;
+            initSimulation();
+        });
+
+        const aiStatus = document.getElementById('aiStatus');
+
+        function showStatus(text) {
+            aiStatus.textContent = text;
+            aiStatus.classList.remove('hidden');
+        }
+        function hideStatus() {
+            aiStatus.classList.add('hidden');
+        }
+
+        // AI Theme
+        document.getElementById('themeBtn').addEventListener('click', async function() {
+            const promptInput = document.getElementById('themePrompt').value;
+            if (!promptInput.trim()) return;
+
+            showStatus('🎨 Painting...');
+            this.disabled = true;
+
+            try {
+                const prompt = `Act as a color designer. Generate a palette of exactly 5 colors that match the following theme description: "${promptInput}". Return ONLY a valid JSON array of 5 valid hex color strings (e.g., ["#FF0000", "#00FF00", ...]). Do not include any other text or markdown formatting.`;
+                const apiKey = ""; // Canvas provides this automatically
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { responseMimeType: "application/json" }
+                    })
+                });
+
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0) {
+                    const colors = JSON.parse(result.candidates[0].content.parts[0].text);
+                    currentThemeColors = colors;
+                    
+                    // Update existing balls instantly
+                    for (let i = 0; i < numBalls; i++) {
+                        color.setHex(randomColorHex());
+                        instancedMesh.setColorAt(i, color);
+                    }
+                    instancedMesh.instanceColor.needsUpdate = true;
+                    showStatus('✨ Applied!');
+                } else {
+                    showStatus('❌ Failed');
+                }
+            } catch (error) {
+                console.error(error);
+                showStatus('❌ Error');
+            } finally {
+                this.disabled = false;
+                setTimeout(hideStatus, 2000);
+            }
+        });
+
+        // AI Chaos
+        document.getElementById('chaosBtn').addEventListener('click', async function() {
+            showStatus('🎲 Rolling...');
+            this.disabled = true;
+
+            try {
+                const prompt = "Act as a chaotic physics simulator. Generate random parameters for a 3D bouncing ball simulation. Return ONLY a valid JSON object with keys: 'gravity' (float -2.0 to 3.0), 'restitution' (float 0.4 to 1.5, >1 adds energy), and 'speedMultiplier' (float 0.1 to 8.0). No markdown.";
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { responseMimeType: "application/json" }
+                    })
+                });
+
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0) {
+                    const chaoticParams = JSON.parse(result.candidates[0].content.parts[0].text);
+                    
+                    gravity = chaoticParams.gravity;
+                    restitution = chaoticParams.restitution;
+                    speedMultiplier = chaoticParams.speedMultiplier;
+                    
+                    document.getElementById('gravity').value = gravity;
+                    document.getElementById('gravityDisplay').textContent = gravity.toFixed(2);
+                    document.getElementById('friction').value = restitution;
+                    document.getElementById('frictionDisplay').textContent = restitution.toFixed(2);
+
+                    initSimulation();
+                    showStatus('🔥 Chaos!');
+                }
+            } catch (error) {
+                console.error(error);
+                showStatus('❌ Error');
+            } finally {
+                this.disabled = false;
+                setTimeout(hideStatus, 2000);
+            }
+        });
+
+        // AI Poetry
+        document.getElementById('poetryBtn').addEventListener('click', async function() {
+            showStatus('📜 Thinking...');
+            this.disabled = true;
+
+            try {
+                const prompt = "Write a short, beautiful haiku about colorful spheres dancing in three-dimensional space. Return only the three lines, no quotes or formatting.";
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0) {
+                    const poetryText = result.candidates[0].content.parts[0].text.trim().replace(/\n/g, '<br>');
+                    const overlay = document.getElementById('poetry-overlay');
+                    const textEl = document.getElementById('poetry-text');
+                    
+                    textEl.innerHTML = poetryText;
+                    overlay.classList.remove('hidden');
+                    
+                    // Fade in
+                    setTimeout(() => overlay.classList.remove('opacity-0'), 50);
+                    
+                    // Fade out after 6 seconds
+                    setTimeout(() => {
+                        overlay.classList.add('opacity-0');
+                        setTimeout(() => overlay.classList.add('hidden'), 1000);
+                    }, 6000);
+
+                    showStatus('✨ Written!');
+                }
+            } catch (error) {
+                console.error(error);
+                showStatus('❌ Error');
+            } finally {
+                this.disabled = false;
+                setTimeout(hideStatus, 2000);
+            }
+        });
+
+        // Start
+        initSimulation();
+        animate();
+    </script>
+</body>
+</html>
